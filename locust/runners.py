@@ -285,6 +285,8 @@ class MasterLocustRunner(DistributedLocustRunner):
             self.stats.clear_all()
             self.exceptions = {}
             events.master_start_hatching.fire()
+        else:
+            logger.info("self.state is %s", self.state)
         
         for client in six.itervalues(self.clients):
             data = {
