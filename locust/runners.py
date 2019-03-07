@@ -38,6 +38,7 @@ class LocustRunner(object):
         self.greenlet = self.locusts
         self.state = STATE_INIT
         self.hatching_greenlet = None
+        self.stepload_greenlet = None
         self.exceptions = {}
         self.stats = global_stats
         self.step_load = options.step_load
@@ -257,7 +258,7 @@ class MasterLocustRunner(DistributedLocustRunner):
         self.greenlet = Group()
         self.greenlet.spawn(self.heartbeat_worker).link_exception(callback=self.noop)
         self.greenlet.spawn(self.client_listener).link_exception(callback=self.noop)
-        
+
         # listener that gathers info on how many locust users the slaves has spawned
         def on_slave_report(client_id, data):
             if client_id not in self.clients:
@@ -289,7 +290,7 @@ class MasterLocustRunner(DistributedLocustRunner):
         slave_hatch_rate = float(hatch_rate) / (num_slaves or 1)
         remaining = locust_count % num_slaves
 
-        logger.info("Sending hatch jobs to %d ready clients", num_slaves)
+        logger.info("Sending hatch jobs of %d locusts and %.2f hatch rate to %d ready clients" % (slave_num_clients, slave_hatch_rate, num_slaves))
 
         if self.state != STATE_RUNNING and self.state != STATE_HATCHING:
             self.stats.clear_all()
@@ -314,17 +315,19 @@ class MasterLocustRunner(DistributedLocustRunner):
         self.state = STATE_HATCHING
 
     def start_stepload(self, locust_count, hatch_rate, step_locust_count, step_duration):
-        self.num_clients = locust_count
+        self.total_clients = locust_count
         self.hatch_rate = hatch_rate
         self.step_clients_growth = step_locust_count
         self.step_duration = step_duration
-        self.greenlet.spawn(self.stepload_worker).link_exception(callback=self.noop)
-
-    def stop(self):
-        # if step load is on, we need to kill the stepload greenlet first
         if self.stepload_greenlet:
             logger.info("There is an ongoing swarming in Step Load mode, will stop it now.")
             self.greenlet.killone(self.stepload_greenlet)
+        self.state = STATE_HATCHING
+        logger.info("Start swarming in Step Load mode: %d locusts, %d delta locusts in step, %ds step duration " % (locust_count, step_locust_count, step_duration))
+        self.stepload_greenlet = self.greenlet.spawn(self.stepload_worker)
+        self.stepload_greenlet.link_exception(callback=self.noop)
+
+    def stop(self):
         self.state = STATE_STOPPING
         for client in self.clients.all:
             self.server.send_to_client(Message("stop", None, client.id))
@@ -348,12 +351,14 @@ class MasterLocustRunner(DistributedLocustRunner):
 
     def stepload_worker(self):
         current_num_clients = 0
-        while True:
+        while self.state == STATE_HATCHING or self.state == STATE_RUNNING:
             current_num_clients += self.step_clients_growth
-            if current_num_clients >= self.num_clients:
+            if current_num_clients > int(self.total_clients):
                 self.start_hatching(self.num_clients, self.hatch_rate)
+                logger.info('Step Load is finished.')
                 break
             self.start_hatching(current_num_clients, self.hatch_rate)
+            logger.info('Step loading: start hatch job of %d locust.' % (current_num_clients))
             gevent.sleep(self.step_duration)
 
     def client_listener(self):

@@ -514,7 +514,7 @@ def main():
             gevent.spawn_later(options.run_time, timelimit_stop)
     
     if options.step_time:
-        if not options.no_web:
+        if not options.step_load:
             logger.error("The --step-time argument can only be used together with --step-load")
             sys.exit(1)
         if options.slave:
