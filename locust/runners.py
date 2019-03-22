@@ -322,8 +322,9 @@ class MasterLocustRunner(DistributedLocustRunner):
         if self.stepload_greenlet:
             logger.info("There is an ongoing swarming in Step Load mode, will stop it now.")
             self.greenlet.killone(self.stepload_greenlet)
-        self.state = STATE_HATCHING
-        logger.info("Start swarming in Step Load mode: %d locusts, %d delta locusts in step, %ds step duration " % (locust_count, step_locust_count, step_duration))
+        
+        logger.info("Start a new swarming in Step Load mode: %d locusts, %d delta locusts in step, %ds step duration " % (locust_count, step_locust_count, step_duration))
+        self.state = STATE_INIT
         self.stepload_greenlet = self.greenlet.spawn(self.stepload_worker)
         self.stepload_greenlet.link_exception(callback=self.noop)
 
@@ -351,10 +352,10 @@ class MasterLocustRunner(DistributedLocustRunner):
 
     def stepload_worker(self):
         current_num_clients = 0
-        while self.state == STATE_HATCHING or self.state == STATE_RUNNING:
+        while self.state == STATE_INIT or self.state == STATE_HATCHING or self.state == STATE_RUNNING:
             current_num_clients += self.step_clients_growth
             if current_num_clients > int(self.total_clients):
-                self.start_hatching(self.num_clients, self.hatch_rate)
+                self.stop()
                 logger.info('Step Load is finished.')
                 break
             self.start_hatching(current_num_clients, self.hatch_rate)
