@@ -363,7 +363,11 @@ class MasterLocustRunner(DistributedLocustRunner):
 
     def client_listener(self):
         while True:
-            client_id, msg = self.server.recv_from_client()
+            try: 
+                client_id, msg = self.server.recv_from_client()
+            except Exception as e:
+                logger.error("Exception found when receiving from client: %s" % ( e ) )
+
             msg.node_id = client_id
             if msg.type == "client_ready":
                 id = msg.node_id
@@ -444,12 +448,19 @@ class SlaveLocustRunner(DistributedLocustRunner):
 
     def heartbeat(self):
         while True:
-            self.client.send(Message('heartbeat', {'state': self.slave_state}, self.client_id))
+            try:
+                self.client.send(Message('heartbeat', {'state': self.slave_state}, self.client_id))
+            except Exception as e:
+                logger.error("Exception found when sending heartbeat: %s" % ( e ) )
+
             gevent.sleep(self.heartbeat_interval)
 
     def worker(self):
         while True:
-            msg = self.client.recv()
+            try:
+                msg = self.client.recv()
+            except Exception as e:
+                logger.error("Exception found when receiving from master: %s" % ( e ) )
             if msg.type == "hatch":
                 self.slave_state = STATE_HATCHING
                 self.client.send(Message("hatching", None, self.client_id))
@@ -474,8 +485,7 @@ class SlaveLocustRunner(DistributedLocustRunner):
             events.report_to_master.fire(client_id=self.client_id, data=data)
             try:
                 self.client.send(Message("stats", data, self.client_id))
-            except:
-                logger.error("Connection lost to master server. Aborting...")
-                break
+            except Exception as e:
+                logger.error("Connection lost to master server. Exception found: %s" % ( e ) )
             
             gevent.sleep(SLAVE_REPORT_INTERVAL)
