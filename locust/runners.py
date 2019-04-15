@@ -355,7 +355,6 @@ class MasterLocustRunner(DistributedLocustRunner):
         while self.state == STATE_INIT or self.state == STATE_HATCHING or self.state == STATE_RUNNING:
             current_num_clients += self.step_clients_growth
             if current_num_clients > int(self.total_clients):
-                self.stop()
                 logger.info('Step Load is finished.')
                 break
             self.start_hatching(current_num_clients, self.hatch_rate)
@@ -364,7 +363,11 @@ class MasterLocustRunner(DistributedLocustRunner):
 
     def client_listener(self):
         while True:
-            client_id, msg = self.server.recv_from_client()
+            try: 
+                client_id, msg = self.server.recv_from_client()
+            except Exception as e:
+                logger.error("Exception found when receiving from client: %s" % ( e ) )
+
             msg.node_id = client_id
             if msg.type == "client_ready":
                 id = msg.node_id
@@ -445,29 +448,36 @@ class SlaveLocustRunner(DistributedLocustRunner):
 
     def heartbeat(self):
         while True:
-            self.client.send(Message('heartbeat', {'state': self.slave_state}, self.client_id))
+            try:
+                self.client.send(Message('heartbeat', {'state': self.slave_state}, self.client_id))
+            except Exception as e:
+                logger.error("Exception found when sending heartbeat: %s" % ( e ) )
+
             gevent.sleep(self.heartbeat_interval)
 
     def worker(self):
         while True:
-            msg = self.client.recv()
-            if msg.type == "hatch":
-                self.slave_state = STATE_HATCHING
-                self.client.send(Message("hatching", None, self.client_id))
-                job = msg.data
-                self.hatch_rate = job["hatch_rate"]
-                #self.num_clients = job["num_clients"]
-                self.host = job["host"]
-                self.hatching_greenlet = gevent.spawn(lambda: self.start_hatching(locust_count=job["num_clients"], hatch_rate=job["hatch_rate"]))
-            elif msg.type == "stop":
-                self.stop()
-                self.client.send(Message("client_stopped", None, self.client_id))
-                self.client.send(Message("client_ready", None, self.client_id))
-                self.slave_state = STATE_INIT
-            elif msg.type == "quit":
-                logger.info("Got quit message from master, shutting down...")
-                self.stop()
-                self.greenlet.kill(block=True)
+            try:
+                msg = self.client.recv()
+                if msg.type == "hatch":
+                    self.slave_state = STATE_HATCHING
+                    self.client.send(Message("hatching", None, self.client_id))
+                    job = msg.data
+                    self.hatch_rate = job["hatch_rate"]
+                    #self.num_clients = job["num_clients"]
+                    self.host = job["host"]
+                    self.hatching_greenlet = gevent.spawn(lambda: self.start_hatching(locust_count=job["num_clients"], hatch_rate=job["hatch_rate"]))
+                elif msg.type == "stop":
+                    self.stop()
+                    self.client.send(Message("client_stopped", None, self.client_id))
+                    self.client.send(Message("client_ready", None, self.client_id))
+                    self.slave_state = STATE_INIT
+                elif msg.type == "quit":
+                    logger.info("Got quit message from master, shutting down...")
+                    self.stop()
+                    self.greenlet.kill(block=True)
+            except Exception as e:
+                logger.error("Exception found in slave worker: %s" % ( e ) )
 
     def stats_reporter(self):
         while True:
@@ -475,8 +485,7 @@ class SlaveLocustRunner(DistributedLocustRunner):
             events.report_to_master.fire(client_id=self.client_id, data=data)
             try:
                 self.client.send(Message("stats", data, self.client_id))
-            except:
-                logger.error("Connection lost to master server. Aborting...")
-                break
+            except Exception as e:
+                logger.error("Connection lost to master server. Exception found: %s" % ( e ) )
             
             gevent.sleep(SLAVE_REPORT_INTERVAL)
