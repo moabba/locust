@@ -355,7 +355,6 @@ class MasterLocustRunner(DistributedLocustRunner):
         while self.state == STATE_INIT or self.state == STATE_HATCHING or self.state == STATE_RUNNING:
             current_num_clients += self.step_clients_growth
             if current_num_clients > int(self.total_clients):
-                self.stop()
                 logger.info('Step Load is finished.')
                 break
             self.start_hatching(current_num_clients, self.hatch_rate)
