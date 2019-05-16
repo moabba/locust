@@ -581,6 +581,7 @@ def main():
         if options.csvfilebase:
             write_stat_csvs(options.csvfilebase)
         print_error_report()
+        gevent.sleep(60)
         sys.exit(code)
     
     # install SIGTERM handler
