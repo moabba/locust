@@ -386,6 +386,7 @@ class MasterLocustRunner(DistributedLocustRunner):
                 if msg.node_id in self.clients:
                     self.clients[msg.node_id].heartbeat = self.heartbeat_liveness
                     self.clients[msg.node_id].state = msg.data['state']
+                    self.server.send_to_client(Message("heartbeat", None, msg.node_id))
             elif msg.type == "stats":
                 events.slave_report.fire(client_id=msg.node_id, data=msg.data)
             elif msg.type == "hatching":
