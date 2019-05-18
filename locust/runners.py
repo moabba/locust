@@ -25,7 +25,7 @@ locust_runner = None
 
 STATE_INIT, STATE_HATCHING, STATE_RUNNING, STATE_CLEANUP, STATE_STOPPING, STATE_STOPPED, STATE_MISSING = ["ready", "hatching", "running", "cleanup", "stopping", "stopped", "missing"]
 SLAVE_REPORT_INTERVAL = 3.0
-
+FALLBACK_INTERVAL = 2
 
 class LocustRunner(object):
     def __init__(self, locust_classes, options):
@@ -367,6 +367,8 @@ class MasterLocustRunner(DistributedLocustRunner):
                 client_id, msg = self.server.recv_from_client()
             except Exception as e:
                 logger.error("Exception found when receiving from client: %s" % ( e ) )
+                gevent.sleep(FALLBACK_INTERVAL)
+                continue
 
             msg.node_id = client_id
             if msg.type == "client_ready":
