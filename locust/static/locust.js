@@ -149,7 +149,7 @@ function updateStats() {
         alternate = false;
         $('#errors tbody').jqoteapp(errors_tpl, (report.errors).sort(sortBy(sortAttribute, desc)));
 
-        if (report.state !== "stopped"){
+        if (report.state !== "stopped" && report.current_response_time_percentile_95 !== null){
             // get total stats row
             var total = report.stats[report.stats.length-1];
             // update charts
