@@ -10,7 +10,7 @@ class BaseSocket(object):
     
     @retry()
     def send(self, msg):
-        self.socket.send(msg.serialize())
+        self.socket.send(msg.serialize(), zmq.NOBLOCK)
 
     @retry()
     def send_to_client(self, msg):
