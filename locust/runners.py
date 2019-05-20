@@ -42,6 +42,7 @@ class LocustRunner(object):
         self.exceptions = {}
         self.stats = global_stats
         self.step_load = options.step_load
+        self.connection_broken = False
 
         # register listener that resets stats when hatching is complete
         def on_hatch_complete(user_count):
@@ -342,6 +343,8 @@ class MasterLocustRunner(DistributedLocustRunner):
     def heartbeat_worker(self):
         while True:
             gevent.sleep(self.heartbeat_interval)
+            if self.connection_broken:
+                continue
             for client in self.clients.all:
                 if client.heartbeat < 0 and client.state != STATE_MISSING:
                     logger.info('Slave %s failed to send heartbeat, setting state to missing.' % str(client.id))
@@ -367,9 +370,10 @@ class MasterLocustRunner(DistributedLocustRunner):
                 client_id, msg = self.server.recv_from_client()
             except Exception as e:
                 logger.error("Exception found when receiving from client: %s" % ( e ) )
+                self.connection_broken = True
                 gevent.sleep(FALLBACK_INTERVAL)
                 continue
-
+            self.connection_broken = False
             msg.node_id = client_id
             if msg.type == "client_ready":
                 id = msg.node_id
