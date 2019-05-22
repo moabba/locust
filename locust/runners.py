@@ -25,7 +25,7 @@ locust_runner = None
 
 STATE_INIT, STATE_HATCHING, STATE_RUNNING, STATE_CLEANUP, STATE_STOPPING, STATE_STOPPED, STATE_MISSING = ["ready", "hatching", "running", "cleanup", "stopping", "stopped", "missing"]
 SLAVE_REPORT_INTERVAL = 3.0
-FALLBACK_INTERVAL = 2
+FALLBACK_INTERVAL = 5
 
 class LocustRunner(object):
     def __init__(self, locust_classes, options):
@@ -406,7 +406,10 @@ class MasterLocustRunner(DistributedLocustRunner):
             elif msg.type == "quit":
                 if msg.node_id in self.clients:
                     del self.clients[msg.node_id]
-                    logger.info("Client %r quit. Currently %i clients connected." % (msg.node_id, len(self.clients.ready)))
+                    logger.info("Client %r quit. Currently %i clients connected." % (msg.node_id, len(self.clients.ready + self.clients.running + self.clients.hatching)))
+                # balance the load distribution when old client leaves
+                if self.state == STATE_RUNNING or self.state == STATE_HATCHING:
+                    self.start_hatching(self.num_clients, self.hatch_rate)
             elif msg.type == "exception":
                 self.log_exception(msg.node_id, msg.data["msg"], msg.data["traceback"])
 
@@ -494,5 +497,6 @@ class SlaveLocustRunner(DistributedLocustRunner):
                 self.client.send(Message("stats", data, self.client_id))
             except Exception as e:
                 logger.error("Connection lost to master server. Exception found: %s" % ( e ) )
+                gevent.sleep(FALLBACK_INTERVAL)
             
             gevent.sleep(SLAVE_REPORT_INTERVAL)
