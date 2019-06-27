@@ -205,7 +205,7 @@ class ResponseContextManager(LocustResponse):
                 self.success()
         return True
     
-    def success(self):
+    def success(self, extra_info={}):
         """
         Report the response as successful
         
@@ -220,10 +220,11 @@ class ResponseContextManager(LocustResponse):
             name=self.locust_request_meta["name"],
             response_time=self.locust_request_meta["response_time"],
             response_length=self.locust_request_meta["content_size"],
+            extra_info=extra_info
         )
         self._is_reported = True
     
-    def failure(self, exc):
+    def failure(self, exc, extra_info={}):
         """
         Report the response as a failure.
         
@@ -244,5 +245,6 @@ class ResponseContextManager(LocustResponse):
             name=self.locust_request_meta["name"],
             response_time=self.locust_request_meta["response_time"],
             exception=exc,
+            extra_info=extra_info
         )
         self._is_reported = True
