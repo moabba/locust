@@ -388,6 +388,9 @@ class MasterLocustRunner(DistributedLocustRunner):
             elif msg.type == "client_stopped":
                 del self.clients[msg.node_id]
                 logger.info("Removing %s client from running clients" % (msg.node_id))
+                if all(map(lambda x: x.state != STATE_RUNNING and x.state != STATE_HATCHING, self.clients.all)):
+                    logger.info("None of clients is in runnning/hatching status, so setting the test status to Stopped.")
+                    self.state = STATE_STOPPED
             elif msg.type == "heartbeat":
                 if msg.node_id in self.clients:
                     self.clients[msg.node_id].heartbeat = self.heartbeat_liveness
@@ -404,17 +407,20 @@ class MasterLocustRunner(DistributedLocustRunner):
                     count = sum(c.user_count for c in six.itervalues(self.clients))
                     events.hatch_complete.fire(user_count=count)
             elif msg.type == "quit":
+                client_cnt = len(self.clients.ready + self.clients.running + self.clients.hatching)
                 if msg.node_id in self.clients:
                     del self.clients[msg.node_id]
-                    logger.info("Client %r quit. Currently %i clients connected." % (msg.node_id, len(self.clients.ready + self.clients.running + self.clients.hatching)))
+                    client_cnt = len(self.clients.ready + self.clients.running + self.clients.hatching)
+                    logger.info("Client %r quit. Currently %i clients connected." % (msg.node_id, client_cnt))
+                if client_cnt == 0:
+                    logger.info("No client is connected, so setting the test status to Ready.")
+                    self.state = STATE_INIT
+                    continue
                 # balance the load distribution when old client leaves
                 if self.state == STATE_RUNNING or self.state == STATE_HATCHING:
                     self.start_hatching(self.num_clients, self.hatch_rate)
             elif msg.type == "exception":
                 self.log_exception(msg.node_id, msg.data["msg"], msg.data["traceback"])
-
-            if not self.state == STATE_INIT and all(map(lambda x: x.state != STATE_RUNNING and x.state != STATE_HATCHING, self.clients.all)):
-                self.state = STATE_STOPPED
 
     @property
     def slave_count(self):
