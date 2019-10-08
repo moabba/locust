@@ -413,7 +413,9 @@ class MasterLocustRunner(DistributedLocustRunner):
             elif msg.type == "exception":
                 self.log_exception(msg.node_id, msg.data["msg"], msg.data["traceback"])
 
-            if not self.state == STATE_INIT and all(map(lambda x: x.state != STATE_RUNNING and x.state != STATE_HATCHING, self.clients.all)):
+            if self.state != STATE_STOPPED and self.state != STATE_INIT and all(map(lambda x: x.state != STATE_RUNNING and x.state != STATE_HATCHING, self.clients.all)):
+                logger.info("Receiving msg %s from client %s" % (msg.type, msg.node_id))
+                logger.info("None of clients is in runnning/hatching status, so setting the test status to Stopped.")
                 self.state = STATE_STOPPED
 
     @property
