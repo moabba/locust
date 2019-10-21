@@ -115,8 +115,10 @@ class LocustRunner(object):
                 def start_locust(_):
                     try:
                         locust().run(runner=self)
-                    except GreenletExit:
+                    except GreenletExit as e:
+                        logger.error("Greenlet Exit in locust run: %s" % ( e ) )
                         pass
+                
                 new_locust = self.locusts.spawn(start_locust, locust)
                 if len(self.locusts) % 10 == 0:
                     logger.debug("%i locusts hatched" % len(self.locusts))
@@ -344,6 +346,7 @@ class MasterLocustRunner(DistributedLocustRunner):
         while True:
             gevent.sleep(self.heartbeat_interval)
             if self.connection_broken:
+                self.reset_connection()
                 continue
             for client in self.clients.all:
                 if client.heartbeat < 0 and client.state != STATE_MISSING:
@@ -363,6 +366,14 @@ class MasterLocustRunner(DistributedLocustRunner):
             self.start_hatching(current_num_clients, self.hatch_rate)
             logger.info('Step loading: start hatch job of %d locust.' % (current_num_clients))
             gevent.sleep(self.step_duration)
+
+    def reset_connection(self):
+        logger.info("Reset connection to slave")
+        try:
+            self.server.close()
+            self.server = rpc.Server(self.master_bind_host, self.master_bind_port)
+        except Exception as e:
+            logger.error("Exception found when resetting connection: %s" % ( e ) )
 
     def client_listener(self):
         while True:
@@ -468,8 +479,16 @@ class SlaveLocustRunner(DistributedLocustRunner):
                 self.client.send(Message('heartbeat', {'state': self.slave_state}, self.client_id))
             except Exception as e:
                 logger.error("Exception found when sending heartbeat: %s" % ( e ) )
-
+                self.reset_connection()
             gevent.sleep(self.heartbeat_interval)
+
+    def reset_connection(self):
+        logger.info("Reset connection to master")
+        try:
+            self.client.close()
+            self.client = rpc.Client(self.master_host, self.master_port, self.client_id)
+        except Exception as e:
+            logger.error("Exception found when resetting connection: %s" % ( e ) )
 
     def worker(self):
         while True:
