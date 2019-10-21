@@ -29,6 +29,9 @@ class BaseSocket(object):
         msg = Message.unserialize(data[1])
         return addr, msg
 
+    def close(self):
+        self.socket.close(linger=3000)
+
 class Server(BaseSocket):
     def __init__(self, host, port):
         BaseSocket.__init__(self, zmq.ROUTER)
