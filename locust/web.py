@@ -62,11 +62,12 @@ def swarm():
     is_step_load = runners.locust_runner.step_load
     locust_count = int(request.form["locust_count"])
     hatch_rate = float(request.form["hatch_rate"])
+    test_duration = parse_timespan(str(request.form["test_duration"]))
 
     if is_step_load:
         step_locust_count = int(request.form["step_locust_count"])
         step_duration = parse_timespan(str(request.form["step_duration"]))
-        runners.locust_runner.start_stepload(locust_count, hatch_rate, step_locust_count, step_duration)
+        runners.locust_runner.start_stepload(locust_count, hatch_rate, step_locust_count, step_duration, test_duration)
         return jsonify({'success': True, 'message': 'Swarming started in Step Load Mode'})
     
     runners.locust_runner.start_hatching(locust_count, hatch_rate)
