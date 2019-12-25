@@ -50,6 +50,7 @@ class LocustRunner(object):
         self.stats = global_stats
         self.step_load = options.step_load
         self.connection_broken = False
+        self.stop_greenlet = None
 
         # register listener that resets stats when hatching is complete
         def on_hatch_complete(user_count):
@@ -234,10 +235,16 @@ class LocustRunner(object):
             self.hatch_rate = hatch_rate
             self.spawn_locusts(locust_count, wait=wait)
 
-    def start_stepload(self, locust_count, hatch_rate, step_locust_count, step_duration):
+    def start_stepload(self, locust_count, hatch_rate, step_locust_count, step_duration, test_duration=-1):
         if locust_count < step_locust_count:
             logger.error("Invalid parameters: total locust count of %d is smaller than step locust count of %d" % (locust_count, step_locust_count))
             return
+
+        self.kill_stop_greenlet()
+        logger.info("Start hatching with duration %d" % (test_duration))
+        if test_duration > 0:
+            self.stop_greenlet = gevent.spawn_later(test_duration, lambda: self.stop())
+
         self.total_clients = locust_count
         self.hatch_rate = hatch_rate
         self.step_clients_growth = step_locust_count
@@ -268,6 +275,8 @@ class LocustRunner(object):
             self.hatching_greenlet.kill(block=True)
         self.kill_locust_greenlets([g for g in self.locusts])
         self.state = STATE_STOPPED
+
+        self.kill_stop_greenlet()
         events.locust_stop_hatching.fire()
     
     def quit(self):
@@ -284,6 +293,13 @@ class LocustRunner(object):
     def noop(self, *args, **kwargs):
         """ Used to link() greenlets to in order to be compatible with gevent 1.0 """
         pass
+
+    def kill_stop_greenlet(self):
+        logger.info("Checking stop greenlet")
+        if self.stop_greenlet is not None:
+            logger.info("Killing stop greenlet")
+            self.stop_greenlet.kill()
+            self.stop_greenlet = None
 
 class LocalLocustRunner(LocustRunner):
     def __init__(self, locust_classes, options):
