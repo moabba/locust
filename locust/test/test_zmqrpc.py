@@ -2,17 +2,25 @@ import unittest
 from time import sleep
 import zmq
 from locust.rpc import zmqrpc, Message
+from locust.test.testcases import LocustTestCase
 
-PORT = 5557
 
-class ZMQRPC_tests(unittest.TestCase):
+class ZMQRPC_tests(LocustTestCase):
     def setUp(self):
-        self.server = zmqrpc.Server('*', PORT)
-        self.client = zmqrpc.Client('localhost', PORT, 'identity')
+        super(ZMQRPC_tests, self).setUp()
+        self.server = zmqrpc.Server('127.0.0.1', 0)
+        self.client = zmqrpc.Client('localhost', self.server.port, 'identity')
 
     def tearDown(self):
         self.server.socket.close()
         self.client.socket.close()
+        super(ZMQRPC_tests, self).tearDown()
+
+    def test_constructor(self):
+        self.assertEqual(self.server.socket.getsockopt(zmq.TCP_KEEPALIVE), 1)
+        self.assertEqual(self.server.socket.getsockopt(zmq.TCP_KEEPALIVE_IDLE), 30)
+        self.assertEqual(self.client.socket.getsockopt(zmq.TCP_KEEPALIVE), 1)
+        self.assertEqual(self.client.socket.getsockopt(zmq.TCP_KEEPALIVE_IDLE), 30)
 
     def test_client_send(self):
         self.client.send(Message('test', 'message', 'identity'))
@@ -30,3 +38,9 @@ class ZMQRPC_tests(unittest.TestCase):
         self.assertEqual(msg.type, 'test')
         self.assertEqual(msg.data, 'message')
         self.assertEqual(msg.node_id, 'identity')
+
+    def test_client_retry(self):
+        server = zmqrpc.Server('127.0.0.1', 0)
+        server.socket.close()
+        with self.assertRaises(zmq.error.ZMQError):
+            server.recv_from_client()

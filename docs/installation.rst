@@ -3,23 +3,16 @@ Installation
 
 Locust is available on `PyPI <https://pypi.org/project/locustio/>`_ and can be installed with `pip <https://pip.pypa.io/>`_.
 
-for Python 2.7:
 
 .. code-block:: console
 
-    $ python -m pip install locustio
-
-for Python 3:
-
-.. code-block:: console
-
-    $ python3 -m pip install locustio
+    $ pip3 install locust
 
 If you want the bleeding edge version, you can use pip to install directly from our Git repository.  For example, to install the master branch using Python 3:
 
 .. code-block:: console
 
-    $ python3 -m pip install -e git://github.com/locustio/locust.git@master#egg=locustio
+    $ pip3 install -e git://github.com/locustio/locust.git@master#egg=locustio
 
 Once Locust is installed, a **locust** command should be available in your shell. (if you're not using
 virtualenv—which you should—make sure your python script directory is on your path).
@@ -34,7 +27,7 @@ To see available options, run:
 Supported Python Versions
 -------------------------
 
-Locust is supported on Python 2.7, 3.4, 3.5, 3.6, 3.7.
+Locust is supported on Python 3.6, 3.7 and 3.8.
 
 
 Installing Locust on Windows

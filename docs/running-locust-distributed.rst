@@ -13,12 +13,22 @@ statistics. The master node doesn't simulate any users itself. Instead you have 
 —most likely—multiple slave Locust nodes using the ``--slave`` flag, together with the 
 ``--master-host`` (to specify the IP/hostname of the master node).
 
-A common set up is to run a single master on one machine, and then run one slave instance per 
-processor core, on the slave machines.
+A common set up is to run a single master on one machine, and then run **one slave instance per 
+processor core** on the slave machines.
 
 .. note::
     Both the master and each slave machine, must have a copy of the locust test scripts 
-    when running Locust distributed.
+    when running Locust distributed. 
+
+.. note::
+    It's recommended that you start a number of simulated users that are greater  than 
+    ``number of locust classes * number of slaves`` when running Locust distributed. 
+    
+    Otherwise - due to the current implementation - 
+    you might end up with a distribution of the  Locust classes that doesn't correspond to the 
+    Locust classes' ``weight`` attribute. And if the hatch rate is lower than the number of slave 
+    nodes, the hatching would occur in "bursts" where all slave node would hatch a single user and 
+    then sleep for multiple seconds, hatch another user, sleep and repeat.
 
 
 Example
@@ -57,9 +67,7 @@ to 127.0.0.1)
 ``--master-port=5557``
 ----------------------
 
-Optionally used together with ``--slave`` to set the port number of the master node (defaults to 5557). 
-Note that locust will use the port specified, as well as the port number +1. So if 5557 is used, locust 
-will use both port 5557 and 5558.
+Optionally used together with ``--slave`` to set the port number of the master node (defaults to 5557).
 
 ``--master-bind-host=X.X.X.X``
 ------------------------------
@@ -71,8 +79,7 @@ will bind to. Defaults to * (all available interfaces).
 ------------------------------
 
 Optionally used together with ``--master``. Determines what network ports that the master node will
-listen to. Defaults to 5557. Note that locust will use the port specified, as well as the port 
-number +1. So if 5557 is used, locust will use both port 5557 and 5558.
+listen to. Defaults to 5557.
 
 ``--expect-slaves=X``
 ---------------------
@@ -91,3 +98,16 @@ Running Locust distributed without the web UI
 =============================================
 
 See :ref:`running-locust-distributed-without-web-ui`
+
+
+Running Locust distributed in Step Load mode
+=============================================
+
+See :ref:`running-locust-in-step-load-mode`
+
+
+Increase Locust's performance
+=============================
+
+If you're planning to run large-scale load tests you might be interested to use the alternative 
+HTTP client that's shipped with Locust. You can read more about it here: :ref:`increase-performance`

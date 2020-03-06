@@ -6,10 +6,8 @@ from time import time
 
 import gevent
 import gevent.lock
-import six
 
 from gevent import GreenletExit, monkey
-from six.moves import xrange
 
 # The monkey patching must run before requests is imported, or else 
 # we'll get an infinite recursion when doing SSL/HTTPS requests.
@@ -19,8 +17,11 @@ monkey.patch_all()
 from . import events
 from .clients import HttpSession
 from .exception import (InterruptTaskSet, LocustError, RescheduleTask,
-                        RescheduleTaskImmediately, StopLocust)
-from .runners import STATE_CLEANUP
+                        RescheduleTaskImmediately, StopLocust, MissingWaitTimeError)
+from .runners import STATE_CLEANUP, LOCUST_STATE_RUNNING, LOCUST_STATE_STOPPING, LOCUST_STATE_WAITING
+from .util import deprecation
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,20 +112,35 @@ class Locust(object):
     host = None
     """Base hostname to swarm. i.e: http://127.0.0.1:1234"""
     
-    min_wait = 1000
-    """Minimum waiting time between the execution of locust tasks"""
+    min_wait = None
+    """Deprecated: Use wait_time instead. Minimum waiting time between the execution of locust tasks"""
     
-    max_wait = 1000
-    """Maximum waiting time between the execution of locust tasks"""
-
-    wait_function = lambda self: random.randint(self.min_wait,self.max_wait) 
-    """Function used to calculate waiting time between the execution of locust tasks in milliseconds"""
+    max_wait = None
+    """Deprecated: Use wait_time instead. Maximum waiting time between the execution of locust tasks"""
+    
+    wait_time = None
+    """
+    Method that returns the time (in seconds) between the execution of locust tasks. 
+    Can be overridden for individual TaskSets.
+    
+    Example::
+    
+        from locust import Locust, between
+        class User(Locust):
+            wait_time = between(3, 25)
+    """
+    
+    wait_function = None
+    """
+    .. warning::
+    
+        DEPRECATED: Use wait_time instead. Note that the new wait_time method should return seconds and not milliseconds.
+    
+    Method that returns the time between the execution of locust tasks in milliseconds
+    """
     
     task_set = None
     """TaskSet class that defines the execution behaviour of this locust"""
-    
-    stop_timeout = None
-    """Number of seconds after which the Locust will die. If None it won't timeout."""
 
     weight = 10
     """Probability of locust being chosen. The higher the weight, the greater is the chance of it being chosen."""
@@ -134,17 +150,24 @@ class Locust(object):
     _setup_has_run = False  # Internal state to see if we have already run
     _teardown_is_set = False  # Internal state to see if we have already run
     _lock = gevent.lock.Semaphore()  # Lock to make sure setup is only run once
+    _state = False
     
     def __init__(self):
         super(Locust, self).__init__()
-        self._lock.acquire()
-        if hasattr(self, "setup") and self._setup_has_run is False:
-            self._set_setup_flag()
-            self.setup()
-        if hasattr(self, "teardown") and self._teardown_is_set is False:
-            self._set_teardown_flag()
-            events.quitting += self.teardown
-        self._lock.release()
+        # check if deprecated wait API is used
+        deprecation.check_for_deprecated_wait_api(self)
+        
+        with self._lock:
+            if hasattr(self, "setup") and self._setup_has_run is False:
+                self._set_setup_flag()
+                try:
+                    self.setup()
+                except Exception as e:
+                    events.locust_error.fire(locust_instance=self, exception=e, tb=sys.exc_info()[2])
+                    logger.error("%s\n%s", e, traceback.format_exc())
+            if hasattr(self, "teardown") and self._teardown_is_set is False:
+                self._set_teardown_flag()
+                events.quitting += self.teardown
 
     @classmethod
     def _set_setup_flag(cls):
@@ -161,7 +184,7 @@ class Locust(object):
         except StopLocust:
             pass
         except (RescheduleTask, RescheduleTaskImmediately) as e:
-            six.reraise(LocustError, LocustError("A task inside a Locust class' main TaskSet (`%s.task_set` of type `%s`) seems to have called interrupt() or raised an InterruptTaskSet exception. The interrupt() function is used to hand over execution to a parent TaskSet, and should never be called in the main TaskSet which a Locust class' task_set attribute points to." % (type(self).__name__, self.task_set.__name__)), sys.exc_info()[2])
+            raise LocustError("A task inside a Locust class' main TaskSet (`%s.task_set` of type `%s`) seems to have called interrupt() or raised an InterruptTaskSet exception. The interrupt() function is used to hand over execution to a parent TaskSet, and should never be called in the main TaskSet which a Locust class' task_set attribute points to." % (type(self).__name__, self.task_set.__name__)) from e
         except GreenletExit as e:
             if runner:
                 runner.state = STATE_CLEANUP
@@ -187,13 +210,22 @@ class HttpLocust(Locust):
     Instance of HttpSession that is created upon instantiation of Locust. 
     The client support cookies, and therefore keeps the session between HTTP requests.
     """
+
+    trust_env = False
+    """
+    Look for proxy settings will slow down the default http client.
+    It's the default behavior of the requests library.
+    We don't need this feature most of the time, so disable it by default.
+    """
     
     def __init__(self):
         super(HttpLocust, self).__init__()
         if self.host is None:
             raise LocustError("You must specify the base host. Either in the host attribute in the Locust class, or on the command line using the --host option.")
-        
-        self.client = HttpSession(base_url=self.host)
+
+        session = HttpSession(base_url=self.host)
+        session.trust_env = self.trust_env
+        self.client = session
 
 
 class TaskSetMeta(type):
@@ -211,34 +243,34 @@ class TaskSetMeta(type):
         if "tasks" in classDict and classDict["tasks"] is not None:
             tasks = classDict["tasks"]
             if isinstance(tasks, dict):
-                tasks = six.iteritems(tasks)
+                tasks = tasks.items()
             
             for task in tasks:
                 if isinstance(task, tuple):
                     task, count = task
-                    for i in xrange(0, count):
+                    for i in range(count):
                         new_tasks.append(task)
                 else:
                     new_tasks.append(task)
         
-        for item in six.itervalues(classDict):
+        for item in classDict.values():
             if hasattr(item, "locust_task_weight"):
-                for i in xrange(0, item.locust_task_weight):
+                for i in range(0, item.locust_task_weight):
                     new_tasks.append(item)
         
         classDict["tasks"] = new_tasks
         
         return type.__new__(mcs, classname, bases, classDict)
 
-@six.add_metaclass(TaskSetMeta)
-class TaskSet(object):
+class TaskSet(object, metaclass=TaskSetMeta):
     """
     Class defining a set of tasks that a Locust user will execute. 
     
     When a TaskSet starts running, it will pick a task from the *tasks* attribute, 
-    execute it, and call its *wait_function* which will define a time to sleep for. 
-    This defaults to a uniformly distributed random number between *min_wait* and 
-    *max_wait* milliseconds. It will then schedule another task for execution and so on.
+    execute it, and then sleep for the number of seconds returned by it's *wait_time* 
+    function. If no wait_time method has been declared on the TaskSet, it'll call the 
+    wait_time function on the Locust by default. It will then schedule another task 
+    for execution and so on.
     
     TaskSets can be nested, which means that a TaskSet's *tasks* attribute can contain 
     another TaskSet. If the nested TaskSet it scheduled to be executed, it will be 
@@ -266,6 +298,7 @@ class TaskSet(object):
     
     min_wait = None
     """
+    Deprecated: Use wait_time instead. 
     Minimum waiting time between the execution of locust tasks. Can be used to override 
     the min_wait defined in the root Locust class, which will be used if not set on the 
     TaskSet.
@@ -273,6 +306,7 @@ class TaskSet(object):
     
     max_wait = None
     """
+    Deprecated: Use wait_time instead. 
     Maximum waiting time between the execution of locust tasks. Can be used to override 
     the max_wait defined in the root Locust class, which will be used if not set on the 
     TaskSet.
@@ -280,7 +314,8 @@ class TaskSet(object):
     
     wait_function = None
     """
-    Function used to calculate waiting time betwen the execution of locust tasks in milliseconds. 
+    Deprecated: Use wait_time instead.
+    Function used to calculate waiting time between the execution of locust tasks in milliseconds. 
     Can be used to override the wait_function defined in the root Locust class, which will be used
     if not set on the TaskSet.
     """
@@ -299,6 +334,9 @@ class TaskSet(object):
     _lock = gevent.lock.Semaphore()  # Lock to make sure setup is only run once
 
     def __init__(self, parent):
+        # check if deprecated wait API is used
+        deprecation.check_for_deprecated_wait_api(self)
+        
         self._task_queue = []
         self._time_start = time()
         
@@ -319,14 +357,17 @@ class TaskSet(object):
         if not self.wait_function:
             self.wait_function = self.locust.wait_function
 
-        self._lock.acquire()
-        if hasattr(self, "setup") and self._setup_has_run is False:
-            self._set_setup_flag()
-            self.setup()
-        if hasattr(self, "teardown") and self._teardown_is_set is False:
-            self._set_teardown_flag()
-            events.quitting += self.teardown
-        self._lock.release()
+        with self._lock:
+            if hasattr(self, "setup") and self._setup_has_run is False:
+                self._set_setup_flag()
+                try:
+                    self.setup()
+                except Exception as e:
+                    events.locust_error.fire(locust_instance=self, exception=e, tb=sys.exc_info()[2])
+                    logger.error("%s\n%s", e, traceback.format_exc())
+            if hasattr(self, "teardown") and self._teardown_is_set is False:
+                self._set_teardown_flag()
+                events.quitting += self.teardown
 
     @classmethod
     def _set_setup_flag(cls):
@@ -345,21 +386,24 @@ class TaskSet(object):
                 self.on_start()
         except InterruptTaskSet as e:
             if e.reschedule:
-                six.reraise(RescheduleTaskImmediately, RescheduleTaskImmediately(e.reschedule), sys.exc_info()[2])
+                raise RescheduleTaskImmediately(e.reschedule).with_traceback(sys.exc_info()[2])
             else:
-                six.reraise(RescheduleTask, RescheduleTask(e.reschedule), sys.exc_info()[2])
+                raise RescheduleTask(e.reschedule).with_traceback(sys.exc_info()[2])
         
         while (True):
             try:
-                if self.locust.stop_timeout is not None and time() - self._time_start > self.locust.stop_timeout:
-                    return
-        
                 if not self._task_queue:
                     self.schedule_task(self.get_next_task())
                 
                 try:
+                    if self.locust._state == LOCUST_STATE_STOPPING:
+                        raise GreenletExit()
                     self.execute_next_task()
+                    if self.locust._state == LOCUST_STATE_STOPPING:
+                        raise GreenletExit()
                 except RescheduleTaskImmediately:
+                    if self.locust._state == LOCUST_STATE_STOPPING:
+                        raise GreenletExit()
                     pass
                 except RescheduleTask:
                     self.wait()
@@ -367,9 +411,9 @@ class TaskSet(object):
                     self.wait()
             except InterruptTaskSet as e:
                 if e.reschedule:
-                    six.reraise(RescheduleTaskImmediately, RescheduleTaskImmediately(e.reschedule), sys.exc_info()[2])
+                    raise RescheduleTaskImmediately(e.reschedule) from e
                 else:
-                    six.reraise(RescheduleTask, RescheduleTask(e.reschedule), sys.exc_info()[2])
+                    raise RescheduleTask(e.reschedule) from e
             except StopLocust:
                 raise
             except GreenletExit:
@@ -377,7 +421,7 @@ class TaskSet(object):
             except Exception as e:
                 events.locust_error.fire(locust_instance=self, exception=e, tb=sys.exc_info()[2])
                 if self.locust._catch_exceptions:
-                    sys.stderr.write("\n" + traceback.format_exc())
+                    logger.error("%s\n%s", e, traceback.format_exc())
                     self.wait()
                 else:
                     raise
@@ -418,12 +462,30 @@ class TaskSet(object):
     def get_next_task(self):
         return random.choice(self.tasks)
     
-    def get_wait_secs(self):
-        millis = self.wait_function()
-        return millis / 1000.0
-
+    def wait_time(self):
+        """
+        Method that returns the time (in seconds) between the execution of tasks. 
+        
+        Example::
+        
+            from locust import TaskSet, between
+            class Tasks(TaskSet):
+                wait_time = between(3, 25)
+        """
+        if self.locust.wait_time:
+            return self.locust.wait_time()
+        elif self.min_wait is not None and self.max_wait is not None:
+            return random.randint(self.min_wait, self.max_wait) / 1000.0
+        else:
+            raise MissingWaitTimeError("You must define a wait_time method on either the %s or %s class" % (
+                type(self.locust).__name__, 
+                type(self).__name__,
+            ))
+    
     def wait(self):
-        self._sleep(self.get_wait_secs())
+        self.locust._state = LOCUST_STATE_WAITING
+        self._sleep(self.wait_time())
+        self.locust._state = LOCUST_STATE_RUNNING
 
     def _sleep(self, seconds):
         gevent.sleep(seconds)
@@ -460,7 +522,7 @@ class TaskSequence(TaskSet):
     *max_wait* milliseconds. It will then schedule the `index + 1 % len(tasks)` task for execution and so on.
 
     TaskSequence can be nested with TaskSet, which means that a TaskSequence's *tasks* attribute can contain
-    TaskSet instances as well as other TaskSequence instances. If the nested TaskSet it scheduled to be executed, it will be
+    TaskSet instances as well as other TaskSequence instances. If the nested TaskSet is scheduled to be executed, it will be
     instantiated and called from the current executing TaskSet. Execution in the
     currently running TaskSet will then be handed over to the nested TaskSet which will
     continue to run until it throws an InterruptTaskSet exception, which is done when

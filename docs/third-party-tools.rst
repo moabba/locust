@@ -2,6 +2,18 @@
 Third party tools
 =====================
 
+Support for other sampler protocols, reporting etc
+==================================================
+
+- `Locust Plugins <https://github.com/SvenskaSpel/locust-plugins/>`_
+
+
+Automate distributed runs with no manual steps
+==============================================
+
+- `Locust Swarm <https://github.com/SvenskaSpel/locust-swarm/>`_
+
+
 Using other languages
 =====================
 
@@ -10,14 +22,24 @@ supported by many languages. So, you can write your Locust tasks in any language
 libraries do the job as a slave runner. They run your Locust tasks, and report to master regularly.
 
 
-Golang 
+Golang
 ---------------
 
-- `Boomer <https://github.com/myzhan/boomer/>`_ 
+- `Boomer <https://github.com/myzhan/boomer/>`_
 
 Java
 ---------------
 
-- `Locust4j <https://github.com/myzhan/locust4j>`_ 
+- `Locust4j <https://github.com/myzhan/locust4j>`_
 
-- `Swarm <https://github.com/anhldbk/swarm>`_ 
+- `Swarm <https://github.com/anhldbk/swarm>`_
+
+
+Configuration Management
+========================
+
+Deploying Locust is easy, but here and there some tools can still provide a measure of convenience.
+
+`tinx.locust <https://github.com/tinx/ansible-role-locust>`_ is an Ansible role to install, configure and
+control Locust as a systemd service, or to build Locust docker images using ansible-container. Also
+manages locustfiles and accompanying test data.
