@@ -145,7 +145,7 @@ class LocustRunner(object):
                 def start_locust(_):
                     try:
                         new_locust.run(runner=self)
-                    except GreenletExit:
+                    except GreenletExit as e:
                         logger.error("Greenlet Exit in locust run: %s" % ( e ) )
                         pass
                 self.locusts.spawn(start_locust, new_locust)

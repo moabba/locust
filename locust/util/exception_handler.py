@@ -13,7 +13,7 @@ def retry(delays=(1, 3, 5),
                     return function(*args, **kwargs)
                 except exception as e:
                     if delay is None:
-                        logger.info("Retry failed after %d times." % ( cnt ) )
+                        logger.info("Retry failed after %d times: %s" % ( cnt, e ) )
                         raise
                     else:
                         cnt += 1
