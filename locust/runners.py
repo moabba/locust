@@ -511,7 +511,7 @@ class MasterLocustRunner(DistributedLocustRunner):
                     continue
                 # balance the load distribution when old client leaves
                 if self.state == STATE_RUNNING or self.state == STATE_HATCHING:
-                    self.start_hatching(self.num_clients, self.hatch_rate)
+                    self.start_hatching(self.target_user_count, self.hatch_rate)
             elif msg.type == "exception":
                 self.log_exception(msg.node_id, msg.data["msg"], msg.data["traceback"])
 
