@@ -602,8 +602,8 @@ class SlaveLocustRunner(DistributedLocustRunner):
         while True:
             try:
                 self._send_stats()
-            except:
-                logger.error("Connection lost to master server. Aborting...")
+            except Exception as e:
+                logger.error("Connection lost to master server: %s. Aborting..." % (e))
                 break
             
             gevent.sleep(SLAVE_REPORT_INTERVAL)
