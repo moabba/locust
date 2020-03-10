@@ -33,7 +33,7 @@ class BaseSocket(object):
         return addr, msg
 
     def close(self):
-        self.socket.close(linger=3000)
+        self.socket.close()
 
 class Server(BaseSocket):
     def __init__(self, host, port):

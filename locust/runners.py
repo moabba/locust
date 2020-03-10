@@ -449,14 +449,16 @@ class MasterLocustRunner(DistributedLocustRunner):
             self.server.close()
             self.server = rpc.Server(self.master_bind_host, self.master_bind_port)
         except Exception as e:
-            logger.error("Exception found when resetting connection: %s" % ( e ) )
+            logger.error("Exception found when resetting connection: %s %s" % ( e , type(e) ) )
+            logger.error("Exception found when resetting connection: %s" % ( traceback.format_exc() ) )
 
     def client_listener(self):
         while True:
             try: 
                 client_id, msg = self.server.recv_from_client()
             except Exception as e:
-                logger.error("Exception found when receiving from client: %s" % ( e ) )
+                logger.error("Exception found when receiving from client: %s" % ( e , type(e) ) )
+                logger.error("Exception found when receiving from client: %s" % ( traceback.format_exc() ) )
                 self.connection_broken = True
                 gevent.sleep(FALLBACK_INTERVAL)
                 continue
@@ -558,7 +560,8 @@ class SlaveLocustRunner(DistributedLocustRunner):
             try:
                 self.client.send(Message('heartbeat', {'state': self.slave_state, 'current_cpu_usage': self.current_cpu_usage}, self.client_id))
             except Exception as e:
-                logger.error("Exception found when sending heartbeat: %s" % ( e ) )
+                logger.error("Exception found when sending heartbeat: %s" % ( e , type(e) ) )
+                logger.error("Exception found when sending heartbeat: %s" % ( traceback.format_exc() ) )
                 self.reset_connection()
             gevent.sleep(self.heartbeat_interval)
 
@@ -568,14 +571,16 @@ class SlaveLocustRunner(DistributedLocustRunner):
             self.client.close()
             self.client = rpc.Client(self.master_host, self.master_port, self.client_id)
         except Exception as e:
-            logger.error("Exception found when resetting connection: %s" % ( e ) )
+            logger.error("Exception found when resetting connection: %s" % ( e , type(e) ) )
+            logger.error("Exception found when resetting connection: %s" % ( traceback.format_exc() ) )
 
     def worker(self):
         while True:
             try:
                 msg = self.client.recv()
             except Exception as e:
-                logger.error("Exception found when receiving from master: %s" % ( e ) )
+                logger.error("Exception found when receiving from master: %s" % ( e , type(e) ) )
+                logger.error("Exception found when receiving from master: %s" % ( traceback.format_exc() ) )
             if msg.type == "hatch":
                 self.slave_state = STATE_HATCHING
                 self.client.send(Message("hatching", None, self.client_id))
