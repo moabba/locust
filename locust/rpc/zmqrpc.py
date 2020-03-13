@@ -19,13 +19,11 @@ class BaseSocket(object):
     def send_to_client(self, msg):
         self.socket.send_multipart([msg.node_id.encode(), msg.serialize()])
 
-    @retry()
     def recv(self):
         data = self.socket.recv()
         msg = Message.unserialize(data)
         return msg
 
-    @retry()
     def recv_from_client(self):
         data = self.socket.recv_multipart()
         addr = data[0].decode()
