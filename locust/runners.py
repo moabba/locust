@@ -11,12 +11,12 @@ import gevent
 import psutil
 from gevent import GreenletExit
 from gevent.pool import Group
-import zmq
-import msgpack
 
 from . import events
 from .rpc import Message, rpc
 from .stats import global_stats
+
+from .exception import RPCError
 
 logger = logging.getLogger(__name__)
 
@@ -450,27 +450,17 @@ class MasterLocustRunner(DistributedLocustRunner):
         try:
             self.server.close()
             self.server = rpc.Server(self.master_bind_host, self.master_bind_port)
-        except zmq.error.ZMQError as e:
-            logger.error("Exception found when resetting connection: %s" % ( e ) )
-            logger.info("Will close the socket and try it again.")
-            logger.error("Exception found when resetting connection: %s" % ( traceback.format_exc() ) )
-        except Exception as e:
-            logger.error("Exception found when resetting connection: %s" % ( e ) )
-            logger.error("Exception found when resetting connection: %s" % ( traceback.format_exc() ) )
+        except RPCError as e:
+            logger.error("RPCError found when resetting connection: %s" % ( e ) )
+            traceback.print_exc()
 
     def client_listener(self):
         while True:
             try: 
                 client_id, msg = self.server.recv_from_client()
-            except (UnicodeDecodeError, msgpack.exceptions.ExtraData, zmq.error.ZMQError) as e:
-                logger.error("Bad networking found when receiving from client: %s" % ( e ) )
-                logger.error("Bad networking found when receiving from client: %s" % ( traceback.format_exc() ) )
-                self.connection_broken = True
-                gevent.sleep(FALLBACK_INTERVAL)
-                continue
-            except Exception as e:
-                logger.error("Exception found when receiving from client: %s" % ( e ) )
-                logger.error("Exception found when receiving from client: %s" % ( traceback.format_exc() ) )
+            except RPCError as e:
+                logger.error("RPCError found when receiving from client: %s" % ( e ) )
+                traceback.print_exc()
                 self.connection_broken = True
                 gevent.sleep(FALLBACK_INTERVAL)
                 continue
@@ -571,9 +561,9 @@ class SlaveLocustRunner(DistributedLocustRunner):
         while True:
             try:
                 self.client.send(Message('heartbeat', {'state': self.slave_state, 'current_cpu_usage': self.current_cpu_usage}, self.client_id))
-            except zmq.error.ZMQError as e:
-                logger.error("Exception found when sending heartbeat: %s" % ( e ) )
-                logger.error("Exception found when sending heartbeat: %s" % ( traceback.format_exc() ) )
+            except RPCError as e:
+                logger.error("RPCError found when sending heartbeat: %s" % ( e ) )
+                traceback.print_exc()
                 self.reset_connection()
             gevent.sleep(self.heartbeat_interval)
 
@@ -582,17 +572,17 @@ class SlaveLocustRunner(DistributedLocustRunner):
         try:
             self.client.close()
             self.client = rpc.Client(self.master_host, self.master_port, self.client_id)
-        except zmq.error.ZMQError as e:
-            logger.error("Exception found when resetting connection: %s" % ( e ) )
-            logger.error("Exception found when resetting connection: %s" % ( traceback.format_exc() ) )
+        except RPCError as e:
+            logger.error("RPCError found when resetting connection: %s" % ( e ) )
+            traceback.print_exc()
 
     def worker(self):
         while True:
             try:
                 msg = self.client.recv()
-            except (msgpack.exceptions.ExtraData, zmq.error.ZMQError) as e:
-                logger.error("Bad networking found when receiving from master: %s" % ( e ) )
-                logger.error("Bad networking found when receiving from master: %s" % ( traceback.format_exc() ) )
+            except RPCError as e:
+                logger.error("RPCError found when receiving from master: %s" % ( e ) )
+                traceback.print_exc()
             if msg.type == "hatch":
                 self.slave_state = STATE_HATCHING
                 self.client.send(Message("hatching", None, self.client_id))
@@ -619,8 +609,8 @@ class SlaveLocustRunner(DistributedLocustRunner):
         while True:
             try:
                 self._send_stats()
-            except zmq.error.ZMQError as e:
-                logger.error("Temporary connection lost to master server: %s. Will retry later." % (e))            
+            except RPCError as e:
+                logger.error("Temporary connection lost to master server: %s, will retry later." % (e))            
             gevent.sleep(SLAVE_REPORT_INTERVAL)
 
     def _send_stats(self):
