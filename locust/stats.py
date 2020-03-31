@@ -38,7 +38,9 @@ PERCENTILES_TO_REPORT = [
     0.95,
     0.98,
     0.99,
+    0.997,
     0.999,
+    0.9995,
     0.9999,
     0.99999,
     1.0
@@ -537,7 +539,7 @@ class StatsEntry(object):
                 percent,
             )
     
-    def percentile(self, tpl=" %-" + str(STATS_TYPE_WIDTH) + "s %-" + str(STATS_NAME_WIDTH) + "s %8d %6d %6d %6d %6d %6d %6d %6d %6d %6d %6d %6d"):
+    def percentile(self, tpl=" %-" + str(STATS_TYPE_WIDTH) + "s %-" + str(STATS_NAME_WIDTH) + "s %8d %6d %6d %6d %6d %6d %6d %6d %6d %6d %6d %6d %6d %6d"):
         if not self.num_requests:
             raise ValueError("Can't calculate percentile on url with no successful requests")
         
@@ -553,7 +555,9 @@ class StatsEntry(object):
             self.get_response_time_percentile(0.95),
             self.get_response_time_percentile(0.98),
             self.get_response_time_percentile(0.99),
+            self.get_response_time_percentile(0.997),
             self.get_response_time_percentile(0.999),
+            self.get_response_time_percentile(0.9995),
             self.get_response_time_percentile(0.9999),
             self.get_response_time_percentile(1.00)
         )
@@ -709,7 +713,7 @@ def print_stats(stats, current=True):
 
 def print_percentile_stats(stats):
     console_logger.info("Percentage of the requests completed within given times")
-    console_logger.info((" %-" + str(STATS_TYPE_WIDTH) + "s %-" + str(STATS_NAME_WIDTH) + "s %8s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s") % (
+    console_logger.info((" %-" + str(STATS_TYPE_WIDTH) + "s %-" + str(STATS_NAME_WIDTH) + "s %8s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s") % (
         'Type',
         'Name',
         '# reqs',
@@ -721,7 +725,9 @@ def print_percentile_stats(stats):
         '95%',
         '98%',
         '99%',
+        '99.7%',
         '99.9%',
+        '99.95%',
         '99.99%',
         '100%',
     ))
@@ -803,7 +809,9 @@ def requests_csv():
             '"95%"',
             '"98%"',
             '"99%"',
+            '"99.7%"',
             '"99.9%"',
+            '"99.95%"',
             '"99.99%"',
             '"99.999"',
             '"100%"'
@@ -857,7 +865,9 @@ def stats_history_csv_header():
         '"95%"',
         '"98%"',
         '"99%"',
+        '"99.7%"',
         '"99.9%"',
+        '"99.95%"',
         '"99.99%"',
         '"99.999"',
         '"100%"'
